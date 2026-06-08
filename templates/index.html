@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Phishing Email Detector</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --border:    #2e3350;
+      --accent:    #4f6ef7;
+      --accent-h:  #6b84ff;
+      --safe:      #22c55e;
+      --safe-bg:   #052e16;
+      --phish:     #ef4444;
+      --phish-bg:  #2d0808;
+      --warn:      #f59e0b;
+      --text:      #e2e8f0;
+      --muted:     #8892b0;
+      --radius:    14px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 60px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    header .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(79,110,247,.15);
+      border: 1px solid rgba(79,110,247,.3);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--accent-h);
+      margin-bottom: 16px;
+      letter-spacing: .04em;
+    }
+    header h1 {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 700;
+      letter-spacing: -.5px;
+      background: linear-gradient(135deg, #e2e8f0 30%, var(--accent-h));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 15px;
+    }
+
+    /* ── Main card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: 100%;
+      max-width: 760px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 220px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 14px 16px;
+      resize: vertical;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: #4a5278; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 9px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 11px 24px;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+
+    #analyseBtn {
+      background: var(--accent);
+      color: #fff;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    #analyseBtn:hover { background: var(--accent-h); }
+    #analyseBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+    #clearBtn {
+      background: var(--surface2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    #clearBtn:hover { color: var(--text); }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result ── */
+    #result {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .verdict-banner {
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .verdict-banner.safe    { background: var(--safe-bg);  border: 1px solid var(--safe); }
+    .verdict-banner.phishing { background: var(--phish-bg); border: 1px solid var(--phish); }
+
+    .verdict-icon {
+      font-size: 36px;
+      line-height: 1;
+    }
+    .verdict-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .safe    .verdict-label { color: var(--safe); }
+    .phishing .verdict-label { color: var(--phish); }
+
+    .verdict-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .safe     .verdict-title { color: var(--safe); }
+    .phishing .verdict-title { color: var(--phish); }
+
+    /* ── Score grid ── */
+    .scores {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .score-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .score-box .val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--accent-h);
+      line-height: 1;
+    }
+    .score-box .lbl {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 5px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    /* ── Progress bar ── */
+    .bar-row { margin-bottom: 20px; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .bar-track {
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width .6s ease;
+    }
+    .bar-fill.danger { background: linear-gradient(90deg, var(--warn), var(--phish)); }
+    .bar-fill.safe   { background: linear-gradient(90deg, var(--accent), var(--safe)); }
+
+    /* ── Triggers ── */
+    .triggers-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 10px;
+    }
+    .trigger-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .trigger-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--warn);
+      border-radius: 8px;
+      padding: 9px 13px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .no-triggers {
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Error ── */
+    #error {
+      display: none;
+      background: var(--phish-bg);
+      border: 1px solid var(--phish);
+      border-radius: 10px;
+      color: var(--phish);
+      padding: 12px 16px;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 12px;
+      color: #3a4060;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">🛡️ Hybrid Rule-Based + ML Detection</div>
+    <h1>Phishing Email Detector</h1>
+    <p>Paste or forward an email below to instantly check if it's phishing or safe.</p>
+  </header>
+
+  <div class="card">
+    <label for="emailInput">Email Content</label>
+    <textarea id="emailInput"
+      placeholder="Paste the full email text here — subject, body, links, everything..."></textarea>
+
+    <div class="actions">
+      <button id="analyseBtn" onclick="analyse()">
+        <span id="btnText">🔍 Analyse Email</span>
+        <div class="spinner" id="spinner"></div>
+      </button>
+      <button id="clearBtn" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div id="error"></div>
+
+    <!-- Result section -->
+    <div id="result">
+
+      <!-- Verdict banner -->
+      <div class="verdict-banner" id="verdictBanner">
+        <div class="verdict-icon" id="verdictIcon"></div>
+        <div>
+          <div class="verdict-label" id="verdictLabel"></div>
+          <div class="verdict-title" id="verdictTitle"></div>
+        </div>
+      </div>
+
+      <!-- Score boxes -->
+      <div class="scores">
+        <div class="score-box">
+          <div class="val" id="finalScore">—</div>
+          <div class="lbl">Risk Score</div>
+        </div>
+        <div class="score-box">
+          <div class="val" id="mlConf">—</div>
+          <div class="lbl">ML Confidence</div>
+        </div>
+        <div class="score-box">
+          <div class="val" id="ruleScore">—</div>
+          <div class="lbl">Rule Score / 10</div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="bar-row">
+        <div class="bar-label">
+          <span>Phishing Risk</span>
+          <span id="barPct">0%</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" id="barFill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Rule triggers -->
+      <div class="triggers-title">Rule-Based Triggers</div>
+      <div class="trigger-list" id="triggerList"></div>
+
+    </div>
+  </div>
+
+  <footer>Bowen University · BU21CSC1078 · Hybrid Phishing Detection System</footer>
+
+  <script>
+    async function analyse() {
+      const text = document.getElementById('emailInput').value.trim();
+      if (!text) { showError('Please paste some email text first.'); return; }
+
+      setLoading(true);
+      hideError();
+      document.getElementById('result').style.display = 'none';
+
+      try {
+        const res  = await fetch('/analyse', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email_text: text })
+        });
+        const data = await res.json();
+
+        if (data.error) { showError(data.error); return; }
+        renderResult(data);
+      } catch (e) {
+        showError('Something went wrong. Make sure the server is running.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function renderResult(data) {
+      const isPhishing = data.verdict === 'phishing';
+
+      // Banner
+      const banner = document.getElementById('verdictBanner');
+      banner.className = 'verdict-banner ' + (isPhishing ? 'phishing' : 'safe');
+      document.getElementById('verdictIcon').textContent  = isPhishing ? '🚨' : '✅';
+      document.getElementById('verdictLabel').textContent = isPhishing ? 'Warning' : 'All Clear';
+      document.getElementById('verdictTitle').textContent = isPhishing
+        ? 'This email appears to be PHISHING'
+        : 'This email appears to be SAFE';
+
+      // Scores
+      document.getElementById('finalScore').textContent = data.final_score + '%';
+      document.getElementById('mlConf').textContent     = data.ml_confidence + '%';
+      document.getElementById('ruleScore').textContent  = data.rule_score + '/10';
+
+      // Bar
+      document.getElementById('barPct').textContent      = data.final_score + '%';
+      const fill = document.getElementById('barFill');
+      fill.style.width = data.final_score + '%';
+      fill.className   = 'bar-fill ' + (isPhishing ? 'danger' : 'safe');
+
+      // Triggers
+      const list = document.getElementById('triggerList');
+      list.innerHTML = '';
+      if (data.reasons && data.reasons.length > 0) {
+        data.reasons.forEach(r => {
+          const div = document.createElement('div');
+          div.className = 'trigger-item';
+          div.textContent = '⚠️  ' + r;
+          list.appendChild(div);
+        });
+      } else {
+        list.innerHTML = '<div class="no-triggers">No specific phishing indicators triggered.</div>';
+      }
+
+      document.getElementById('result').style.display = 'block';
+    }
+
+    function clearAll() {
+      document.getElementById('emailInput').value = '';
+      document.getElementById('result').style.display = 'none';
+      hideError();
+    }
+
+    function setLoading(on) {
+      document.getElementById('analyseBtn').disabled    = on;
+      document.getElementById('spinner').style.display  = on ? 'block' : 'none';
+      document.getElementById('btnText').textContent    = on ? 'Analysing...' : '🔍 Analyse Email';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent    = '❌  ' + msg;
+      el.style.display  = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('error').style.display = 'none';
+    }
+  </script>
+
+</body>
+</html>
