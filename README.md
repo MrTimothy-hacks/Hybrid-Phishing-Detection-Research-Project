@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Hybrid Rule-Based & Machine Learning Phishing Email Detection System
 
 > **Segun-Olufemi Timothy — BU21CSC1078**  
@@ -178,3 +179,6 @@ The engine scores each email from 0–10 based on:
 | Balancing | imbalanced-learn (SMOTE) |
 | Visualisation | matplotlib, seaborn |
 | Serialisation | joblib |
+=======
+# Hybrid-Phishing-Detection-Research-Project
+>>>>>>> 3b82afba7bd806c48eb1b9d3d054195930a1d9e7
